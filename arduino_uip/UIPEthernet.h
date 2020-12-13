@@ -60,11 +60,26 @@ extern "C"
 
 #define BUF ((struct uip_tcpip_hdr *)&uip_buf[UIP_LLH_LEN])
 
+enum EthernetLinkStatus {
+  Unknown,
+  LinkON,
+  LinkOFF
+};
+
+enum EthernetHardwareStatus {
+  EthernetNoHardware,
+  EthernetW5100,
+  EthernetW5200,
+  EthernetW5500,
+  EthernetENC28J60 = 10,
+  EthernetENC424J600
+};
+
 class UIPEthernetClass
 {
 public:
   UIPEthernetClass();
-
+  void init(uint8_t csPin);
   int begin(const uint8_t* mac);
   void begin(const uint8_t* mac, IPAddress ip);
   void begin(const uint8_t* mac, IPAddress ip, IPAddress dns);
@@ -76,17 +91,22 @@ public:
   // events have been processed. Renews dhcp-lease if required.
   int maintain();
 
+  EthernetLinkStatus linkStatus();
+  EthernetHardwareStatus hardwareStatus();
+
   IPAddress localIP();
   IPAddress subnetMask();
   IPAddress gatewayIP();
   IPAddress dnsServerIP();
 
 private:
+  static bool initialized;
+
   static memhandle in_packet;
   static memhandle uip_packet;
   static uint8_t uip_hdrlen;
   static uint8_t packetstate;
-  
+
   static IPAddress _dnsServerAddress;
   static DhcpClass* _dhcp;
 

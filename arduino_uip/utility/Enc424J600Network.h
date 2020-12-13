@@ -35,7 +35,7 @@
 
 #define UIP_RECEIVEBUFFERHANDLE 0xff
 
-//#define ENC28J60DEBUG 1
+//#define ENC424J600_DEBUG 1
 //#define DEBUGSERIAL Serial
 
 /*
@@ -47,6 +47,8 @@ class Enc424J600Network : public MemoryPool
 {
 
 private:
+  static uint8_t csPin;
+
   static uint16_t nextPacketPtr;
   static uint8_t bank;
 
@@ -57,17 +59,17 @@ private:
   static void enc_writeOp(uint8_t op, uint8_t address, uint8_t* data, uint8_t len); // perform write operation
   static void enc_readOp(uint8_t op, uint8_t address, uint8_t* data, uint8_t len); // perform read operation
   static void enc_setBank(uint8_t address, bool keepEnabled = false); // select the memory bank
-  
+
   static void writeControlRegister(uint8_t address, uint8_t data); // select bank and write control register
   static void writeControlRegister16(uint8_t address, uint16_t data); // select bank and write 2 bytes to control register
   static uint8_t readControlRegister(uint8_t address); // select bank and read control register
   static uint16_t readControlRegister16(uint8_t address); // select bank and read control register
   static void writeBitField(uint8_t address, uint8_t data); // select bank and write control register bit
   static void writePointer(uint8_t instruction, uint16_t address, bool keepEnabled = false); // select bank and write 2 bytes to a pointer
-  
+
   static void mempool_block_move(memaddress dest, memaddress src, memaddress len, uint16_t bufstart, uint16_t bufend);
-  
-  
+
+
 
   static void writeOp(uint8_t op, uint8_t address, uint8_t data);
   static uint16_t setReadPtr(memhandle handle, memaddress position, uint16_t len);
@@ -77,9 +79,9 @@ private:
   static uint8_t readByte(uint16_t addr);
   static uint8_t readByteTX(uint16_t addr);
   static void writeByte(uint16_t addr, uint8_t data);
-  
-  
-  
+
+
+
   static void phyWrite(uint8_t address, uint16_t data);
   static uint16_t phyRead(uint8_t address);
   static void clkout(uint8_t clk);
@@ -90,12 +92,13 @@ private:
 
 public:
 
-  uint8_t getrev(void);
+  static uint8_t getrev(void);
   void powerOn();
   void powerOff();
-  bool linkStatus();
+  static bool linkStatus();
 
-  static void init(uint8_t* macaddr);
+  static void setCsPin(uint8_t _csPin) {csPin = _csPin;}
+  static bool init(uint8_t* macaddr);
   static memhandle receivePacket();
   static void freePacket();
   static memaddress blockSize(memhandle handle);

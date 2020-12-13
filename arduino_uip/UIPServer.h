@@ -28,6 +28,7 @@ class UIPServer : public Server {
 public:
   UIPServer(uint16_t);
   UIPClient available();
+  UIPClient accept();
   void begin();
   size_t write(uint8_t);
   size_t write(const uint8_t *buf, size_t size);

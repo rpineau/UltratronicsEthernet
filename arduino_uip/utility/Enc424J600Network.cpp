@@ -34,11 +34,12 @@ extern "C" {
 bool isActive = false;
 
 // set CS to 0 = active
-#define CSACTIVE if (!isActive) {SPI.beginTransaction(mySetting);  digitalWrite(ENC28J60_CONTROL_CS,LOW);} isActive = true
+#define CSACTIVE if (!isActive) {SPI.beginTransaction(mySetting);  digitalWrite(csPin, LOW);} isActive = true
 // set CS to 1 = passive
-#define CSPASSIVE if (isActive) { digitalWrite(ENC28J60_CONTROL_CS,HIGH);  SPI.endTransaction();} isActive = false
+#define CSPASSIVE if (isActive) { digitalWrite(csPin, HIGH);  SPI.endTransaction();} isActive = false
 //
 SPISettings mySetting(14000000, MSBFIRST, SPI_MODE0);
+uint8_t Enc424J600Network::csPin=SS;
 uint16_t Enc424J600Network::nextPacketPtr;
 uint8_t Enc424J600Network::bank=0xff;
 
@@ -64,7 +65,7 @@ void Enc424J600Network::enc_writeOp(uint8_t op, uint8_t address, uint8_t* data, 
 
 	// issue write command
 	SPI.transfer( op | (address & ADDR_MASK));
-	
+
 	for ( int i = 0; i<len; i++)
 	  SPI.transfer(  *data++);
 
@@ -79,7 +80,7 @@ void Enc424J600Network::enc_readOp(uint8_t op, uint8_t address, uint8_t* data, u
 
 	// issue write command
 	SPI.transfer( op | (address & ADDR_MASK));
-	
+
 	for (int i = 0; i< len; i++)
 	*data++ = SPI.transfer(  0x00);
 
@@ -103,7 +104,7 @@ void Enc424J600Network::writeControlRegister16(uint8_t address, uint16_t data)
   // set the bank
   enc_setBank(address);
   // do the write
-  
+
 
   enc_writeOp(ENC624J600_WRITE_CONTROL_REGISTER, address&0x1F,(uint8_t*) &data , 2);
 
@@ -114,7 +115,7 @@ void Enc424J600Network::writeControlRegister16(uint8_t address, uint16_t data)
 void Enc424J600Network::writePointer(uint8_t instruction, uint16_t address, bool keepEnabled)
 {
 	CSACTIVE;
-	
+
 	SPI.transfer(instruction);
 	SPI.transfer( address&0x00FF);
 	SPI.transfer( address>>8);
@@ -134,7 +135,7 @@ uint8_t Enc424J600Network::readControlRegister(uint8_t address)
   enc_setBank(address,true);
   // do the write
   enc_readOp(ENC624J600_READ_CONTROL_REGISTER, address&0x1F,(uint8_t*) &retval ,1);
-  
+
   return retval;
 }
 
@@ -148,7 +149,7 @@ uint16_t Enc424J600Network::readControlRegister16(uint8_t address)
   enc_setBank(address,true);
   // do the write
   enc_readOp(ENC624J600_READ_CONTROL_REGISTER, address&0x1F,(uint8_t*) &retval ,2);
-  
+
   return retval;
 }
 
@@ -172,7 +173,7 @@ void Enc424J600Network::enc_setBank(uint8_t address, bool keepEnabled)
     // set the bank
 
     bank = (address & BANK_MASK);
-    
+
     switch((bank)>>5){
 			case 0 :
 				enc_SBI(ENC624J600_BANK0_SELECT, keepEnabled);
@@ -191,23 +192,18 @@ void Enc424J600Network::enc_setBank(uint8_t address, bool keepEnabled)
 }
 
 
-
-
-
-
-
-void Enc424J600Network::init(uint8_t* macaddr)
+bool Enc424J600Network::init(uint8_t* macaddr)
 {
   MemoryPool::init(); // 1 byte in between RX_STOP_INIT and pool to allow prepending of controlbyte
 
-#ifdef ENC28J60DEBUG
+#ifdef ENC424J600_DEBUG
   DEBUGSERIAL.println("ENC624J600Init");
 #endif
   /* enable SPI */
-	pinMode(ENC28J60_CONTROL_CS, OUTPUT); 
-	digitalWrite(ENC28J60_CONTROL_CS, HIGH); 
+    pinMode(csPin, OUTPUT);
+	digitalWrite(csPin, HIGH);
   SPI.begin();
-  
+
 	//8.1 RESET
 	//STEP ONE
 	writeControlRegister16(EUDASTL,0x1234);
@@ -217,7 +213,7 @@ void Enc424J600Network::init(uint8_t* macaddr)
 	{
 		writeControlRegister16(EUDASTL,0x1234);
 	}
-  
+
 	//STEP THREE
 	while(readControlRegister(ESTATH) & ESTAT_CLKRDY);
 
@@ -227,22 +223,22 @@ void Enc424J600Network::init(uint8_t* macaddr)
 
 	//STEP FIVE
 	delayMicroseconds(25);
-		  
+
 	//STEP SIX
 	if (readControlRegister16(EUDASTL)==0x0000)
 	{
-		delayMicroseconds(265);		
+		delayMicroseconds(265);
 		//8.2 CLKOUT Frequency
-		// Arduino : 16MHz =>  COCON=0100 
+		// Arduino : 16MHz =>  COCON=0100
 		// We do not use the clkout
 		//writeBitField( ECON2H,ECON2_COCON2>>8);
 		//8.3 reception
 		nextPacketPtr = RXSTART_INIT;
 		writeControlRegister16(ERXSTL, RXSTART_INIT);
 
-		
+
 		writeControlRegister16(ERXTAILL, RXSTOP_INIT);
-			
+
  		// USER buffer : EUDAST Pointer at a higher memory address relative to the end address.
  		writeControlRegister16(EUDASTL, 0x5FFF);
  		writeControlRegister16(EUDANDL, 0x5FFF);
@@ -250,7 +246,7 @@ void Enc424J600Network::init(uint8_t* macaddr)
 #ifndef IPV6
  		// fill user-defined area with arpResponse
 		// only for IPv4
- 		unsigned char arpResponse[ARP_RESPONSE_PACKET_SIZE-MAC_ADDR_SIZE] = { 
+ 		unsigned char arpResponse[ARP_RESPONSE_PACKET_SIZE-MAC_ADDR_SIZE] = {
 			0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 			0x08, 0x06,
 			0x00, 0x01,
@@ -272,26 +268,26 @@ void Enc424J600Network::init(uint8_t* macaddr)
 		//8.5 RECEIVE FILTER TODO!!!
 #ifdef IPV6
 		// We need multicast for neighbor sollicitation
-	d	writeControlRegister(ERXFCONL,ERXFCON_CRCEN|ERXFCON_RUNTEN|ERXFCON_UCEN|ERXFCON_MCEN);
+        writeControlRegister(ERXFCONL,ERXFCON_CRCEN|ERXFCON_RUNTEN|ERXFCON_UCEN|ERXFCON_MCEN);
 #else
 		// crc ERROR FILTER => disabled
 		// frames shorter than 64 bits => disabled
 		// CRC error rejection => enabled
 		// Unicast collection filter => enabled
 		// Not me unicast filter => disabled
-		// Multicast collection filter 
+		// Multicast collection filter
 		writeControlRegister(ERXFCONL,ERXFCON_CRCEN|ERXFCON_RUNTEN|ERXFCON_BCEN|ERXFCON_UCEN);//ERXFCON_CRCEN|ERXFCON_RUNTEN|ERXFCON_UCEN);
 		// brodcast collection filter => enabled
 		// Hash table collection filter.. c
 		// Magic packet => disabled TODO
 		// PAttern
 #endif
-			
+
 #ifdef CHECKSUM_PATTERN
 		// Checksum only for IPv4
-		//window 
+		//window
 		writeControlRegister16(EPMOL,0x0000);
-			
+
 		//pattern
 		writeControlRegister(EPMM1L, WINDOW_PATTERN_0);
 		writeControlRegister(EPMM1H, WINDOW_PATTERN_1);
@@ -307,7 +303,7 @@ void Enc424J600Network::init(uint8_t* macaddr)
 #endif
 		//exact pattern
 		//writeControlRegister(ERXFCONH,0x01);
-					      
+
 		// 8.6 MAC initialization ...
 		//flow control ???
 		writeBitField( MACON2L, MACON2_TXCRCEN|MACON2_PADCFG0|MACON2_PADCFG1|MACON2_PADCFG2|MACON2_HFRMEN);
@@ -322,18 +318,18 @@ void Enc424J600Network::init(uint8_t* macaddr)
 		writeControlRegister(MAADR2H, macaddr[3]);
 		writeControlRegister(MAADR3L, macaddr[4]);
 		writeControlRegister(MAADR3H, macaddr[5]);
-		
+
 
 		///writeControlRegister(ECON2H, 0xa0);
 		//writeControlRegister(ECON2H, 224);
-		
-		//8.7 PHY initialization 
+
+		//8.7 PHY initialization
 		// auto-negotiation ?
 		//	ENC624J600PhyWrite(PHANA,0x05E1);
 		// 8.8 OTHER considerations
 		//half-duplex mode
 			//writeBitField( MACON2H,MACON2_DEFER|MACON2_BPEN|MACON2_NOBKOFF);$
-			
+
 		// enable interuption
 		//writeControlRegister(EIEL,0x40);
 		//writeControlRegister(EIEH,0x80);
@@ -347,20 +343,21 @@ void Enc424J600Network::init(uint8_t* macaddr)
 	}
 	else
 	{
-#ifdef ENC28J60DEBUG
+#ifdef ENC424J600_DEBUG
 	  DEBUGSERIAL.println ("Error in initialization!");
 #endif
 		// Oops something went wrong
 	}
-#ifdef ENC28J60DEBUG
+#ifdef ENC424J600_DEBUG
 	DEBUGSERIAL.println ("ENC624J600Init complete");
 #endif
+    return getrev();
 }
 
 uint16_t Enc424J600Network::readPacket(memhandle handle, memaddress position, uint8_t* buffer, uint16_t len)
-{ 
+{
 
-  #ifdef ENC28J60DEBUG
+  #ifdef ENC424J600_DEBUG
   memblock *packet = handle == UIP_RECEIVEBUFFERHANDLE ? &receivePkt : &blocks[handle];
   memaddress start = handle == UIP_RECEIVEBUFFERHANDLE && packet->begin + position > RXSTOP_INIT ? packet->begin + position-RXSTOP_INIT+RXSTART_INIT : packet->begin + position;
 	DEBUGSERIAL.print ("readPacket (");
@@ -373,14 +370,12 @@ uint16_t Enc424J600Network::readPacket(memhandle handle, memaddress position, ui
 	DEBUGSERIAL.print (len);
 	DEBUGSERIAL.print (" bytes: ");
 #endif
-  len = setReadPtr(handle, position, len); 
+  len = setReadPtr(handle, position, len);
   readBuffer(len, buffer);
   return len;
 }
 
-int prev = 0;
-memhandle
-Enc424J600Network::receivePacket()
+memhandle Enc424J600Network::receivePacket()
 {
   uint8_t rxstat;
   uint16_t len;
@@ -396,12 +391,12 @@ Enc424J600Network::receivePacket()
       // Set the read pointer to the start of the received packet
      // writeControlRegister16(ENC624J600_WRITE_ERXRDPT, nextPacketPtr);
       writePointer(ENC624J600_WRITE_ERXRDPT, nextPacketPtr,true);
-      
+
       SPI.transfer(ENC624J600_READ_ERXDATA);
       // read the next packet pointer
       nextPacketPtr = SPI.transfer( 0x00);
       nextPacketPtr |= SPI.transfer( 0x00) << 8;
-      
+
       // read the packet length (see datasheet page 43)
       len = SPI.transfer( 0x00);
       len |= SPI.transfer( 0x00) << 8;
@@ -410,8 +405,8 @@ Enc424J600Network::receivePacket()
       //rxstat = enc_readOp(ENC624J600_READ_ERXDATA, 0);
      // rxstat |= enc_readOp(ENC624J600_READ_ERXDATA, 0) << 8;
       CSPASSIVE;
-      
-#ifdef ENC28J60DEBUG
+
+#ifdef ENC424J600_DEBUG
       DEBUGSERIAL.print("network::receivePacket [");
       DEBUGSERIAL.print(readPtr,HEX);
       DEBUGSERIAL.print("-");
@@ -427,7 +422,7 @@ Enc424J600Network::receivePacket()
       //DEBUGSERIAL.println((rxstat & 0x80)!=0 ? "OK" : "failed");
 #endif
       // decrement the packet counter indicate we are done with this packet
-      
+
       // check CRC and symbol errors (see datasheet page 44, table 7-3):
       // The ERXFCON.CRCEN is set by default. Normally we should not
       // need to check this.
@@ -437,20 +432,20 @@ Enc424J600Network::receivePacket()
 		enc_SBI(ENC624J600_SETPKTDEC);
 
 		if (len > 200) {
-#ifdef ENC28J60DEBUG
+#ifdef ENC424J600_DEBUG
 			DEBUGSERIAL.println("Packet discarded!");
 #endif
 			return (NOBLOCK);
 		}
 				receivePkt.begin = readPtr;
-			receivePkt.size = len;	
+			receivePkt.size = len;
 
 
 
 		return UIP_RECEIVEBUFFERHANDLE;
    // Move the RX read pointer to the start of the next received packet
       // This frees the memory we just read out
-      
+
     }
   return (NOBLOCK);
 }
@@ -484,7 +479,7 @@ Enc424J600Network::sendPacket(memhandle handle)
   if (data)
     writeByte(start-1, 0);
 
-#ifdef ENC28J60DEBUG
+#ifdef ENC424J600_DEBUG
   DEBUGSERIAL.print("sendPacket(");
   DEBUGSERIAL.print(handle);
   DEBUGSERIAL.print(") [");
@@ -504,7 +499,7 @@ Enc424J600Network::sendPacket(memhandle handle)
   //writeControlRegister16(ETXSTL, start);
   // Set the TXND pointer to correspond to the packet size given
   //writeControlRegister16(ETXLENL, packet->size);
-  
+
     writeControlRegister(ETXSTL,(start)&0x00FF);
     writeControlRegister(ETXSTH,(start)>>8);
     // Set the TXND pointer to correspond to the packet size given
@@ -512,7 +507,7 @@ Enc424J600Network::sendPacket(memhandle handle)
     writeControlRegister(ETXLENH, (packet->size)>>8);
 
 
- 
+
     // send the contents of the transmit buffer onto the network
     enc_SBI(ENC624J600_SETTXRTS);
 
@@ -530,7 +525,7 @@ Enc424J600Network::sendPacket(memhandle handle)
   if (data)
     writeByte(start-1, data);
 
-	#ifdef ENC28J60DEBUG
+	#ifdef ENC424J600_DEBUG
 DEBUGSERIAL.println("Sendpacket Done");
 #endif
 }
@@ -570,7 +565,7 @@ Enc424J600Network::writePacket(memhandle handle, memaddress position, uint8_t* b
 writePointer(ENC624J600_WRITE_EGPWRPT,start);
   if (len > packet->size - position)
     len = packet->size - position;
-    
+
 //    DEBUGSERIAL.print(" len: ");
 //DEBUGSERIAL.println(len);
   writeBuffer(len, buffer);
@@ -603,7 +598,7 @@ uint8_t Enc424J600Network::readByte(uint16_t addr)
 
   uint8_t retval;
 
-writePointer(ENC624J600_WRITE_ERXRDPT, addr,false);
+  writePointer(ENC624J600_WRITE_ERXRDPT, addr,false);
 
   CSACTIVE;
   // issue read command
@@ -665,22 +660,22 @@ Enc424J600Network::mempool_block_move(memaddress dest, memaddress src, memaddres
  /* for (int i =0; i<len-1; i++) {
   Enc424J600Network::writeByte(dest+i-1,Enc424J600Network::readByte(src+i+1));
   }*/
-  
+
   //Enc424J600Network::writeByte(dest+len-1,0x0A);
   //return;
-  
+
   if (len == 1)
     {
       Enc424J600Network::writeByte(dest,Enc424J600Network::readByte(src));
     }
   else
     {
-    
+
     int o = readControlRegister(ECON1L);
       while (o & ECON1_DMAST){
-      
+
       o=readControlRegister(ECON1L);
-      }  
+      }
       // calculate address of last byte
       //len += src - 1;
       // copy, no checksum
@@ -712,21 +707,21 @@ Enc424J600Network::mempool_block_move(memaddress dest, memaddress src, memaddres
      /*   DEBUGSERIAL.print("DMA start pointer should be: ");
         DEBUGSERIAL.print(src);
         DEBUGSERIAL.print(" and is: ");
-        
+
         DEBUGSERIAL.println(((Enc424J600Network::enc_readOp(ENC624J600_READ_CONTROL_REGISTER, EDMASTH) <<8) | Enc424J600Network::readOp(ENC624J600_READ_CONTROL_REGISTER, EDMASTL)));
-        
+
         DEBUGSERIAL.print("DMA dest pointer should be: ");
         DEBUGSERIAL.print(dest);
         DEBUGSERIAL.print(" and is: ");
-        
+
         DEBUGSERIAL.println(((Enc424J600Network::enc_readOp(ENC624J600_READ_CONTROL_REGISTER, EDMADSTH) <<8) | Enc424J600Network::enc_readOp(ENC624J600_READ_CONTROL_REGISTER, EDMADSTL)));
-        
+
                 DEBUGSERIAL.print("DMA len pointer should be: ");
         DEBUGSERIAL.print(len);
         DEBUGSERIAL.print(" and is: ");
-        
+
         DEBUGSERIAL.println(((Enc424J600Network::enc_readOp(ENC624J600_READ_CONTROL_REGISTER, EDMALENH) <<8) | Enc424J600Network::enc_readOp(ENC624J600_READ_CONTROL_REGISTER, EDMALENL)));*/
-               
+
       /*
        2. If an interrupt at the end of the copy process is
        desired, set EIE.DMAIE and EIE.INTIE and
@@ -741,13 +736,13 @@ Enc424J600Network::mempool_block_move(memaddress dest, memaddress src, memaddres
       // wait until runnig DMA is completed
       o = readControlRegister(ECON1L);
       while (o & ECON1_DMAST){
-      
+
       o=readControlRegister(ECON1L);
-      }      
+      }
 
 		writeControlRegister16(EUDASTL, 0x5FFF);
  		writeControlRegister16(EUDANDL, 0x5FFF);
-     
+
     }
 }
 
@@ -771,8 +766,8 @@ Enc424J600Network::readBuffer(uint16_t len, uint8_t* data)
   CSACTIVE;
   // issue read command
   SPI.transfer(  ENC624J600_READ_ERXDATA);
-  
-  #ifdef ENC28J60DEBUG fsfsd
+
+  #ifdef ENC424J600_DEBUG fsfsd
     DEBUGSERIAL.print("Readbuffer: ");
   #endif
   while(len)
@@ -781,7 +776,7 @@ Enc424J600Network::readBuffer(uint16_t len, uint8_t* data)
     // read data
 
     *data = SPI.transfer(0x00);
-    #ifdef ENC28J60DEBUG
+    #ifdef ENC424J600_DEBUG
     DEBUGSERIAL.print(" ");
     DEBUGSERIAL.print(*data,HEX);
     #endif
@@ -789,7 +784,7 @@ Enc424J600Network::readBuffer(uint16_t len, uint8_t* data)
   }
   //*data='\0';
   CSPASSIVE;
-  #ifdef ENC28J60DEBUG
+  #ifdef ENC424J600_DEBUG
   DEBUGSERIAL.println(" ");
   #endif
 }
@@ -808,7 +803,7 @@ Enc424J600Network::writeBuffer(uint16_t len, uint8_t* data)
     SPI.transfer( *data);
     data++;
 	}
-  //DEBUGSERIAL.println("");   
+  //DEBUGSERIAL.println("");
   CSPASSIVE;
 }
 
@@ -850,14 +845,12 @@ Enc424J600Network::clkout(uint8_t clk)
 }
 
 // read the revision of the chip:
-uint8_t
-Enc424J600Network::getrev(void)
+uint8_t Enc424J600Network::getrev(void)
 {
-  //return(readControlRegister(EREVID));
+  return(readControlRegister(EIDLEDL));
 }
 
-uint16_t
-Enc424J600Network::chksum(uint16_t sum, memhandle handle, memaddress pos, uint16_t len)
+uint16_t Enc424J600Network::chksum(uint16_t sum, memhandle handle, memaddress pos, uint16_t len)
 {
   uint16_t t;
   len = setReadPtr(handle, pos, len)-1;
@@ -869,7 +862,7 @@ Enc424J600Network::chksum(uint16_t sum, memhandle handle, memaddress pos, uint16
   for (i = 0; i < len; i+=2)
   {
     // read data
-    
+
     t = SPI.transfer(0x00) << 8;
     t += SPI.transfer(0x00);
     sum += t;
@@ -891,8 +884,7 @@ Enc424J600Network::chksum(uint16_t sum, memhandle handle, memaddress pos, uint16
   return sum;
 }
 
-void
-Enc424J600Network::powerOff()
+void Enc424J600Network::powerOff()
 {
   /*enc_writeOp(ENC624J600_BIT_FIELD_CLEAR, ECON1, ECON1_RXEN);
   delay(50);
@@ -901,8 +893,7 @@ Enc424J600Network::powerOff()
   writeBitField( ECON2, ECON2_PWRSV);*/
 }
 
-void
-Enc424J600Network::powerOn()
+void Enc424J600Network::powerOn()
 {
   /*enc_writeOp(ENC624J600_BIT_FIELD_CLEAR, ECON2, ECON2_PWRSV);
   delay(50);
@@ -910,10 +901,7 @@ Enc424J600Network::powerOn()
   delay(50);*/
 }
 
-bool
-Enc424J600Network::linkStatus()
+bool Enc424J600Network::linkStatus()
 {
   return (phyRead(PHSTAT2) & 0x0400) > 0;
 }
-
-Enc424J600Network Enc28J60;

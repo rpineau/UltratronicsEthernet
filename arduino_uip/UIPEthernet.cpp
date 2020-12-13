@@ -39,6 +39,7 @@ extern "C"
 
 #define ETH_HDR ((struct uip_eth_hdr *)&uip_buf[0])
 
+bool UIPEthernetClass::initialized = false;
 memhandle UIPEthernetClass::in_packet(NOBLOCK);
 memhandle UIPEthernetClass::uip_packet(NOBLOCK);
 uint8_t UIPEthernetClass::uip_hdrlen(0);
@@ -55,6 +56,12 @@ unsigned long UIPEthernetClass::periodic_timer;
 UIPEthernetClass::UIPEthernetClass()
 {
 }
+
+void UIPEthernetClass::init(uint8_t csPin)
+{
+  Enc424J600Network::setCsPin(csPin);
+}
+
 
 #if UIP_UDP
 int
@@ -133,6 +140,20 @@ int UIPEthernetClass::maintain(){
 #endif
 }
 
+EthernetLinkStatus UIPEthernetClass::linkStatus()
+{
+  if (!(initialized && Enc424J600Network::getrev()))
+    return Unknown;
+  return Enc424J600Network::linkStatus() ? LinkON : LinkOFF;
+}
+
+EthernetHardwareStatus UIPEthernetClass::hardwareStatus()
+{
+  if (!(initialized && Enc424J600Network::getrev()))
+    return EthernetNoHardware;
+  return EthernetENC424J600;
+}
+
 IPAddress UIPEthernetClass::localIP()
 {
   IPAddress ret;
@@ -165,16 +186,18 @@ IPAddress UIPEthernetClass::dnsServerIP()
 void
 UIPEthernetClass::tick()
 {
+  if (!initialized)
+    return;
 
   if (in_packet == NOBLOCK)
   {
     in_packet = Enc424J600Network::receivePacket();
 
   }
-  
+
   if (in_packet != NOBLOCK)
     {
-    
+
     #ifdef UIPETHERNET_DEBUG
 
           DEBUGSERIAL.print(F("--------------\nreceivePacket: "));
@@ -324,7 +347,7 @@ sendandfree:
 void UIPEthernetClass::init(const uint8_t* mac) {
   periodic_timer = millis() + UIP_PERIODIC_TIMER;
 
-  Enc424J600Network::init((uint8_t*)mac);
+  initialized = Enc424J600Network::init((uint8_t*)mac);
   uip_seteth_addr(mac);
 
   uip_init();
@@ -455,8 +478,8 @@ uip_tcpchksum(void)
           UIP_IPH_LEN + UIP_LLH_LEN + upper_layer_memlen,
           upper_layer_len - upper_layer_memlen
       );
- 
-      
+
+
 #ifdef UIPETHERNET_DEBUG_CHKSUM
       DEBUGSERIAL.print(F("chksum uip_packet("));
       DEBUGSERIAL.print(uip_packet);

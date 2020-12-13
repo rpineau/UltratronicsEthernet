@@ -39,6 +39,21 @@ UIPClient UIPServer::available()
   return UIPClient();
 }
 
+UIPClient UIPServer::accept()
+{
+  UIPEthernetClass::tick();
+  for ( uip_userdata_t* data = &UIPClient::all_data[0]; data < &UIPClient::all_data[UIP_CONNS]; data++ )
+    {
+      if (!(data->state & UIP_CLIENT_ACCEPTED)
+          && (((data->state & UIP_CLIENT_CONNECTED) && uip_conns[data->conn_index].lport ==_port)
+              || ((data->state & UIP_CLIENT_REMOTECLOSED) && ((uip_userdata_closed_t *)data)->lport == _port))) {
+        data->state |= UIP_CLIENT_ACCEPTED;
+        return UIPClient(data);
+      }
+    }
+  return UIPClient();
+}
+
 void UIPServer::begin()
 {
   uip_listen(_port);
